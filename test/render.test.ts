@@ -3,7 +3,7 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { runCli, type CliResult } from "./support/cli.js";
-import { findTextRows, frameAt, markedRowIndex, probeVideo } from "./support/media.js";
+import { findTextRows, frameAt, inkColour, markedRowIndex, probeVideo, rgbFrameAt, type TextRow } from "./support/media.js";
 import { makeEpisodeFolder, writeEpisodeYaml, type FixtureTrack } from "./support/episodeFolder.js";
 
 describe("pnpm render refuses an Episode whose Tracklist is not approved", () => {
@@ -78,6 +78,100 @@ describe("pnpm render on an approved Episode", () => {
 
     expect(rows).toHaveLength(tracks.length);
     expect(markedRowIndex(rows)).toBe(row);
+  });
+  it("draws the Tracklist in the house style: on the right, left-aligned, sitting slightly above vertical centre", async () => {
+    const frame = await frameAt(path.join(folder, "out", "video.mp4"), 0.5);
+    const rows = findTextRows(frame);
+    const unmarked = rows.filter((_, i) => i !== markedRowIndex(rows));
+
+    expect(Math.min(...rows.map((r) => r.left))).toBeGreaterThan(frame.width / 2);
+    // Left-aligned: every unmarked row starts at the same x.
+    expect(Math.max(...unmarked.map((r) => r.left)) - Math.min(...unmarked.map((r) => r.left))).toBeLessThanOrEqual(2);
+    // The reference video's list sits about 92–94 px above centre at 2160 px tall. Glyph ink
+    // isn't exactly centred in its line box, so allow a few px of slack around that.
+    const inkCentre = (rows[0]!.top + rows.at(-1)!.bottom) / 2;
+    expect(frame.height / 2 - inkCentre).toBeGreaterThan(94 - 6);
+    expect(frame.height / 2 - inkCentre).toBeLessThan(94 + 6);
+  });
+});
+
+describe("Episode Settings: side", () => {
+  const tracks = [
+    { file: "a.mp3", seconds: 1.5, title: "LADY PINK PANTHER", artist: "鈴木茂" },
+    { file: "b.mp3", seconds: 1.5, title: "すてきなメゾン feat. 玉城ティナ", artist: "tofubeats" },
+  ] satisfies FixtureTrack[];
+
+  async function renderedRows(settings: { side?: string }): Promise<{ width: number; rows: TextRow[] }> {
+    const folder = await makeEpisodeFolder({ tracks, settings });
+    const result = await runCli("render", folder);
+    expect(result.stderr).toBe("");
+    const frame = await frameAt(path.join(folder, "out", "video.mp4"), 0.5);
+    return { width: frame.width, rows: findTextRows(frame) };
+  }
+
+  it("`side: left` mirrors the Tracklist to the left, still left-aligned with the ▶ to the left of the row", async () => {
+    const right = await renderedRows({});
+    const left = await renderedRows({ side: "left" });
+
+    expect(left.rows).toHaveLength(2);
+    expect(Math.max(...left.rows.map((r) => r.right))).toBeLessThan(left.width / 2);
+    expect(markedRowIndex(left.rows)).toBe(0);
+    // Rows are the same text, so with the list mirrored the widest row ends as far from the
+    // left edge as the right-hand list's text starts from the right edge.
+    const rightTextLeft = right.rows[1]!.left;
+    expect(Math.abs(left.rows[1]!.right - (right.width - 1 - rightTextLeft))).toBeLessThanOrEqual(3);
+    // Left-aligned: the unmarked row starts where the marked row's text would.
+    const markerToText = right.rows[1]!.left - right.rows[0]!.left;
+    expect(Math.abs(left.rows[1]!.left - left.rows[0]!.left - markerToText)).toBeLessThanOrEqual(1);
+    // Same height on either side.
+    expect(left.rows.map((r) => r.top)).toEqual(right.rows.map((r) => r.top));
+  });
+});
+
+describe("Episode Settings: textColor", () => {
+  const tracks = [
+    { file: "a.mp3", seconds: 1.5, title: "LADY PINK PANTHER", artist: "鈴木茂" },
+    { file: "b.mp3", seconds: 1.5, title: "SUMMER BLUE", artist: "ブレッド & バター" },
+  ] satisfies FixtureTrack[];
+
+  async function render(settings: { side?: string; textColor?: string }): Promise<string> {
+    const folder = await makeEpisodeFolder({ tracks, settings });
+    const result = await runCli("render", folder);
+    expect(result.stderr).toBe("");
+    return path.join(folder, "out", "video.mp4");
+  }
+
+  it("colours both the text and the ▶", async () => {
+    // Gold: bright enough to find against the dark fixture Background, but clearly not white.
+    const video = await render({ textColor: "#FFD400" });
+    const gray = await frameAt(video, 0.5);
+    const rgb = await rgbFrameAt(video, 0.5);
+    const rows = findTextRows(gray, 120);
+    expect(rows).toHaveLength(2);
+    const textLeft = rows[1]!.left;
+
+    const marker = inkColour(gray, rgb, { ...rows[0]!, right: textLeft - 4 }, 120);
+    const text = inkColour(gray, rgb, { ...rows[1]!, left: textLeft }, 120);
+    for (const [r, g, b] of [marker, text]) {
+      expect(r).toBeGreaterThan(200);
+      expect(g).toBeGreaterThan(150);
+      expect(g).toBeLessThan(235);
+      expect(b).toBeLessThan(90);
+    }
+  });
+
+  it("left unset, draws exactly the house style: white text and ▶, on the right", async () => {
+    const unset = await render({});
+    const houseStyle = await render({ side: "right", textColor: "#FFFFFF" });
+    const gray = await frameAt(unset, 0.5);
+    const rgb = await rgbFrameAt(unset, 0.5);
+    const rows = findTextRows(gray);
+
+    expect(rows[0]!.left).toBeGreaterThan(gray.width / 2);
+    const [r, g, b] = inkColour(gray, rgb, rows[1]!, 200);
+    expect(Math.min(r, g, b)).toBeGreaterThan(215);
+    expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(15);
+    expect((await frameAt(houseStyle, 0.5)).pixels.equals(gray.pixels)).toBe(true);
   });
 });
 

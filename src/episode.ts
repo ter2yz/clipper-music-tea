@@ -1,4 +1,5 @@
 import path from "node:path";
+import type { Side } from "./tracklist/template.js";
 
 /** One row of the Tracklist: which MP3 plays, and how it's written on screen. */
 export interface TracklistEntry {
@@ -11,7 +12,11 @@ export interface TracklistEntry {
 export interface Episode {
   folder: string;
   approved: boolean;
-  // Episode Settings. side and textColor are read here once they're supported.
+  // Episode Settings, with the house style filled in for anything not set.
+  /** Which side of the frame the Tracklist sits on (default right). */
+  side: Side;
+  /** CSS colour of the Tracklist text and ▶ (default white). */
+  textColor: string;
   /** Level every Track to the house loudness before joining (default true). */
   normalizeLoudness: boolean;
   /** In play order. */

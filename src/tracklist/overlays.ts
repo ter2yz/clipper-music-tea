@@ -1,13 +1,13 @@
 import path from "node:path";
 import { fontsLoaded, withTracklistPage, type TracklistWindow } from "./browser.js";
-import type { Frame } from "./template.js";
+import type { Frame, TracklistSettings } from "./template.js";
 
 /**
  * Screenshots the Tracklist template once per Now-Playing Marker position, into
  * transparent PNGs the size of the frame. Returns the PNG paths in Tracklist order.
  */
-export async function renderTracklistOverlays(rows: string[], frame: Frame, workDir: string): Promise<string[]> {
-  return withTracklistPage(rows, frame, async (page) => {
+export async function renderTracklistOverlays(rows: string[], settings: TracklistSettings, frame: Frame, workDir: string): Promise<string[]> {
+  return withTracklistPage(rows, settings, frame, async (page) => {
     const overlays: string[] = [];
     for (let row = 0; row < rows.length; row++) {
       await page.evaluate((index) => (window as unknown as TracklistWindow).setMarkedRow(index), row);

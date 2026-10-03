@@ -253,4 +253,24 @@ describe("pnpm render refuses Display Names that would not draw safely", () => {
     expect(result.stderr).not.toContain("Track 1");
     expect(result.stderr).toContain("Render refused.");
   });
+
+  it("checks rows against the side the Tracklist is drawn on, naming only the rows too wide", async () => {
+    // Wide enough to fit on the right, but on the left — where the list is mirrored and the ▶
+    // hangs off its left edge — it runs past the safe area.
+    const wide = { ...track("b.mp3"), title: "Midnight Pretenders (Extended Club Version)", artist: "亜蘭知子" };
+    const tracks = [{ ...track("a.mp3"), title: "Plastic Love", artist: "竹内まりや" }, wide];
+    const onRight = await makeEpisodeFolder({ tracks });
+    const onLeft = await makeEpisodeFolder({ tracks, settings: { side: "left" } });
+
+    const right = await runCli("render", onRight);
+    const left = await runCli("render", onLeft);
+
+    expect(right.stderr).toBe("");
+    expect(right.exitCode).toBe(0);
+    expect(left.exitCode).not.toBe(0);
+    expect(left.stderr).toMatch(
+      /^Error: Track 2 "Midnight Pretenders \(Extended Club Version\) - 亜蘭知子" is too wide for the frame: with the ▶ it runs \d+ px past the safe area\. Shorten its title or artist\.$/m,
+    );
+    expect(left.stderr).not.toContain("Track 1");
+  });
 });

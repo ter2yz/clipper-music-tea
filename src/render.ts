@@ -38,7 +38,7 @@ export async function renderEpisode(episode: Episode, io: RenderIo): Promise<Ren
 
     io.log("Drawing Tracklist overlays…");
     const displayNames = episode.tracklist.map(displayName);
-    const overlays = await renderTracklistOverlays(displayNames, VIDEO_FRAME, workDir);
+    const overlays = await renderTracklistOverlays(displayNames, { side: episode.side, textColor: episode.textColor }, VIDEO_FRAME, workDir);
 
     io.log("Encoding video…");
     const videoList = await encodeStillSegments(

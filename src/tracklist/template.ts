@@ -23,12 +23,18 @@ export const FONT_FILES = { inter: "Inter-Regular.ttf", notoSansJp: "NotoSansJP-
  * Calibrated against the reference Episode (jp-city-pop, 6144×3456) by rendering and
  * comparing row widths and spacing: rows sit 1/24 of the frame height apart (≈ 47 px on a
  * 1125 px frame), the font size is half that (72 px at 3456; row widths match to < 1 %),
- * and the text's left edge is at 63.6 % of the frame width.
+ * and the text's left edge is at 63.6 % of the frame width. The list is centred vertically and
+ * then lifted by 0.0427 of the frame height (92 px at 2160): rendering the reference's 11 Display
+ * Names over its Background and scaling to 2000×1125 lines every row up with the reference's to
+ * within 1 px.
  */
 export const HOUSE_STYLE = {
   rowPitch: 1 / 24,
   fontSize: 1 / 48,
+  /** Right side: the text's left edge, from the frame's left. Left side (mirrored): the list's right edge, from the frame's right. */
   listLeft: 0.636,
+  /** How far the list's centre sits above the frame's centre, as a fraction of frame height. */
+  listLift: 0.0427,
   textColor: "#FFFFFF",
   marker: "▶",
   /** Space between the ▶ and its row's text, as a fraction of frame height. */
@@ -36,6 +42,18 @@ export const HOUSE_STYLE = {
   /** The ▶ is drawn smaller than the text, like the reference. */
   markerScale: 0.62,
 } as const;
+
+export type Side = "right" | "left";
+
+/** The Episode Settings that change how the Tracklist is drawn. */
+export interface TracklistSettings {
+  /** `right` is the house style; `left` mirrors the list about the frame's vertical centre line. */
+  side: Side;
+  /** Any CSS colour (already validated); colours the text and the ▶. */
+  textColor: string;
+}
+
+export const HOUSE_TRACKLIST_SETTINGS: TracklistSettings = { side: "right", textColor: HOUSE_STYLE.textColor };
 
 export interface HorizontalSpan {
   left: number;
@@ -58,6 +76,7 @@ export interface TracklistPageOptions {
   rows: string[];
   /** Index of the row with the Now-Playing Marker. */
   markedRow: number;
+  settings: TracklistSettings;
   frame: Frame;
   /** Where the page loads the bundled fonts from (a file:// URL for render, an HTTP path for Preview). */
   fontBaseUrl: string;
@@ -69,8 +88,12 @@ export interface TracklistPageOptions {
  * Now-Playing Marker position without reloading fonts, and `markAllRows()` / `rowExtents()`
  * for the width check (see TracklistWindow in browser.ts).
  */
-export function tracklistPage({ rows, markedRow, frame, fontBaseUrl }: TracklistPageOptions): string {
+export function tracklistPage({ rows, markedRow, settings, frame, fontBaseUrl }: TracklistPageOptions): string {
   const px = (fraction: number) => `${(fraction * frame.height).toFixed(3)}px`;
+  // On the right, the text's left edge sits at listLeft. On the left, the list is mirrored: its
+  // widest row ends as far from the frame's left edge as listLeft is from the right edge. Rows
+  // stay left-aligned and the ▶ stays to the left of its row on both sides.
+  const horizontal = settings.side === "left" ? "right" : "left";
   const base = fontBaseUrl.endsWith("/") ? fontBaseUrl : `${fontBaseUrl}/`;
   const items = rows
     .map((row, i) => `<li${i === markedRow ? ' class="now-playing"' : ""}>${escapeHtml(row)}</li>`)
@@ -102,9 +125,9 @@ export function tracklistPage({ rows, markedRow, frame, fontBaseUrl }: Tracklist
       }
       .tracklist {
         position: absolute;
-        top: 0;
-        bottom: 0;
-        left: ${(HOUSE_STYLE.listLeft * 100).toFixed(3)}%;
+        top: ${px(-HOUSE_STYLE.listLift)};
+        bottom: ${px(HOUSE_STYLE.listLift)};
+        ${horizontal}: ${(HOUSE_STYLE.listLeft * 100).toFixed(3)}%;
         margin: 0;
         padding: 0;
         list-style: none;
@@ -115,7 +138,7 @@ export function tracklistPage({ rows, markedRow, frame, fontBaseUrl }: Tracklist
         font-weight: 400;
         font-size: ${px(HOUSE_STYLE.fontSize)};
         line-height: ${px(HOUSE_STYLE.rowPitch)};
-        color: ${HOUSE_STYLE.textColor};
+        color: ${settings.textColor};
         white-space: nowrap;
       }
       .tracklist li {
@@ -146,12 +169,18 @@ export function tracklistPage({ rows, markedRow, frame, fontBaseUrl }: Tracklist
       window.markAllRows = () => {
         rows().forEach((li) => li.classList.add("now-playing"));
       };
+      // Each row is measured with the others hidden, i.e. laid out as if it were the widest.
+      // On the right that changes nothing horizontally; on the left, where the widest row sets
+      // where every row starts, it means only the rows that are themselves too wide are blamed.
       window.rowExtents = () =>
         rows().map((li) => {
+          const others = rows().filter((other) => other !== li);
+          others.forEach((other) => (other.style.display = "none"));
           const range = document.createRange();
           range.selectNodeContents(li);
           const text = range.getBoundingClientRect();
           const marker = getComputedStyle(li, "::before");
+          others.forEach((other) => (other.style.display = ""));
           return { left: text.left - parseFloat(marker.width) - parseFloat(marker.marginRight), right: text.right };
         });
     </script>

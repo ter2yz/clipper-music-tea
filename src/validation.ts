@@ -6,7 +6,7 @@ import { displayName, EPISODE_FILE, type Episode, type TracklistEntry } from "./
 import { probeWidth } from "./media/ffmpeg.js";
 import { charactersFontsCannotDraw, describeCharacter } from "./tracklist/fontCoverage.js";
 import { measureTracklistRows } from "./tracklist/measure.js";
-import { safeArea, VIDEO_FRAME } from "./tracklist/template.js";
+import { HOUSE_TRACKLIST_SETTINGS, safeArea, VIDEO_FRAME, type TracklistSettings } from "./tracklist/template.js";
 import { listEpisodeFolder, type EpisodeFolderContents } from "./episodeFolder.js";
 
 /**
@@ -52,7 +52,7 @@ export async function checkEpisodeFolder(folder: string): Promise<EpisodeCheck> 
     error(`${EPISODE_FILE} is not approved. Review the Tracklist, then set \`approved: true\` to render.`);
   }
 
-  checkEpisodeSettings(doc, error);
+  const settings = checkEpisodeSettings(doc, error);
 
   const tracks = Array.isArray(doc.tracks) ? (doc.tracks as unknown[]) : [];
   if (tracks.length === 0) {
@@ -66,9 +66,9 @@ export async function checkEpisodeFolder(folder: string): Promise<EpisodeCheck> 
     return entry.entry;
   });
   checkTracksAgainstFolder(tracklist, contents, error);
-  await checkDisplayNames(tracklist, error);
+  await checkDisplayNames(tracklist, settings, error);
 
-  return { episode: { folder, approved: doc.approved === true, normalizeLoudness: doc.normalizeLoudness !== false, tracklist }, problems: problems.all };
+  return { episode: { folder, approved: doc.approved === true, ...settings, normalizeLoudness: doc.normalizeLoudness !== false, tracklist }, problems: problems.all };
 }
 
 /** Collects Problems; `error` and `warn` can be passed around on their own. */
@@ -111,7 +111,7 @@ function checkTracksAgainstFolder(tracklist: TracklistEntry[], contents: Episode
  * Now-Playing Marker beside it, must fit inside the frame's safe area. Rows missing a title or
  * artist are already reported and are skipped here.
  */
-async function checkDisplayNames(tracklist: TracklistEntry[], error: Report): Promise<void> {
+async function checkDisplayNames(tracklist: TracklistEntry[], settings: TracklistSettings, error: Report): Promise<void> {
   const named = tracklist.flatMap((entry, i) => (entry.title.trim() && entry.artist.trim() ? [{ track: i + 1, name: displayName(entry) }] : []));
 
   for (const { track, name } of named) {
@@ -123,7 +123,7 @@ async function checkDisplayNames(tracklist: TracklistEntry[], error: Report): Pr
 
   if (named.length === 0) return;
   const safe = safeArea(VIDEO_FRAME);
-  const extents = await measureTracklistRows(named.map((row) => row.name), VIDEO_FRAME);
+  const extents = await measureTracklistRows(named.map((row) => row.name), settings, VIDEO_FRAME);
   named.forEach(({ track, name }, i) => {
     const { left, right } = extents[i]!;
     const overflow = Math.ceil(Math.max(safe.left - left, right - safe.right));
@@ -133,17 +133,27 @@ async function checkDisplayNames(tracklist: TracklistEntry[], error: Report): Pr
   });
 }
 
-function checkEpisodeSettings(doc: Record<string, unknown>, error: Report): void {
+/**
+ * Checks the Episode Settings and returns the Tracklist's, with the house style filled in for
+ * anything unset — or invalid, so the rest of the checks (and Preview) still have a layout to use.
+ */
+function checkEpisodeSettings(doc: Record<string, unknown>, error: Report): TracklistSettings {
   const { side, textColor, normalizeLoudness } = doc;
-  if (side !== undefined && side !== "right" && side !== "left") {
+  const settings = { ...HOUSE_TRACKLIST_SETTINGS };
+  if (side === "right" || side === "left") {
+    settings.side = side;
+  } else if (side !== undefined) {
     error(`${EPISODE_FILE}: \`side\` must be "right" or "left", not ${asWrittenInYaml(side)}.`);
   }
-  if (textColor !== undefined && !(typeof textColor === "string" && isCssColour(textColor))) {
+  if (typeof textColor === "string" && isCssColour(textColor)) {
+    settings.textColor = textColor;
+  } else if (textColor !== undefined) {
     error(`${EPISODE_FILE}: \`textColor\` must be a CSS colour such as "#FFFFFF", not ${asWrittenInYaml(textColor)}.`);
   }
   if (normalizeLoudness !== undefined && typeof normalizeLoudness !== "boolean") {
     error(`${EPISODE_FILE}: \`normalizeLoudness\` must be true or false, not ${asWrittenInYaml(normalizeLoudness)}.`);
   }
+  return settings;
 }
 
 /** A YAML value as the user would recognise it in a message. */

@@ -36,7 +36,7 @@ export interface FixtureEpisode {
   tracks: FixtureTrack[];
   approved?: boolean;
   /** Episode Settings written to episode.yaml (left out when not given, so the defaults apply). */
-  settings?: { normalizeLoudness?: boolean };
+  settings?: { side?: string; textColor?: string; normalizeLoudness?: boolean };
   /** `null` leaves the Episode Folder without a Background. */
   background?: { file?: string; width: number; height: number } | null;
 }

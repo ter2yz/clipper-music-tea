@@ -39,11 +39,49 @@ export async function frameAt(file: string, seconds: number): Promise<GrayFrame>
   return { width: video.width, height: video.height, pixels: stdout };
 }
 
+export interface RgbFrame {
+  width: number;
+  height: number;
+  /** Three bytes (R, G, B) per pixel, row by row. */
+  pixels: Buffer;
+}
+
+/** Decodes the single video frame showing at `seconds`, as 8-bit RGB. */
+export async function rgbFrameAt(file: string, seconds: number): Promise<RgbFrame> {
+  const { video } = await probeVideo(file);
+  const { stdout } = await exec(
+    "ffmpeg",
+    ["-v", "error", "-ss", String(seconds), "-i", file, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+    { encoding: "buffer", maxBuffer: video.width * video.height * 4 },
+  );
+  return { width: video.width, height: video.height, pixels: stdout };
+}
+
+/**
+ * Average colour of the ink (pixels brighter than `threshold` in `gray`) inside a box, read
+ * from the same frame decoded as RGB.
+ */
+export function inkColour(gray: GrayFrame, rgb: RgbFrame, box: { left: number; right: number; top: number; bottom: number }, threshold: number): [number, number, number] {
+  const sum = [0, 0, 0];
+  let count = 0;
+  for (let y = box.top; y <= box.bottom; y++) {
+    for (let x = box.left; x <= box.right; x++) {
+      if (gray.pixels[y * gray.width + x]! <= threshold) continue;
+      for (let c = 0; c < 3; c++) sum[c]! += rgb.pixels[(y * rgb.width + x) * 3 + c]!;
+      count++;
+    }
+  }
+  if (count === 0) throw new Error(`No ink in ${JSON.stringify(box)}`);
+  return sum.map((s) => Math.round(s / count)) as [number, number, number];
+}
+
 export interface TextRow {
   top: number;
   bottom: number;
   /** Leftmost bright pixel in the row — the ▶ when the row is marked, else the text. */
   left: number;
+  /** Rightmost bright pixel in the row. */
+  right: number;
 }
 
 /**
@@ -57,18 +95,20 @@ export function findTextRows(frame: GrayFrame, threshold = 200): TextRow[] {
   let blankRun = 0;
   for (let y = 0; y < height; y++) {
     let left = -1;
+    let right = -1;
     for (let x = 0; x < width; x++) {
       if (pixels[y * width + x]! > threshold) {
-        left = x;
-        break;
+        if (left < 0) left = x;
+        right = x;
       }
     }
     if (left >= 0) {
       if (current && blankRun <= 12) {
         current.bottom = y;
         current.left = Math.min(current.left, left);
+        current.right = Math.max(current.right, right);
       } else {
-        current = { top: y, bottom: y, left };
+        current = { top: y, bottom: y, left, right };
         rows.push(current);
       }
       blankRun = 0;

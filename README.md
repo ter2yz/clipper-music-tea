@@ -2,7 +2,7 @@
 
 Turns a folder of MP3s plus one background image into a 4K YouTube music video: the song list is shown over the image, with a ▶ marking the song now playing.
 
-> **Status:** `pnpm render` works, including every validation rule below and loudness levelling (`normalizeLoudness`); the other Episode Settings (`side`, `textColor`) are checked but not yet applied. Preview and the `/episode` skill are still to come. The rest of this page is the planned workflow.
+> **Status:** `pnpm render` works, including every validation rule below and all Episode Settings (`side`, `textColor`, `normalizeLoudness`). Preview and the `/episode` skill are still to come. The rest of this page is the planned workflow.
 > Vocabulary: [`CONTEXT.md`](./CONTEXT.md). Decisions: [`docs/adr/`](./docs/adr/).
 
 ## Making an Episode — what to do next
@@ -75,8 +75,8 @@ Upload `video.mp4` to YouTube by hand; copy title/description from `description.
 
 ```yaml
 approved: false            # render refuses until true
-side: right                # optional: right | left
-textColor: "#FFFFFF"       # optional
+side: right                # optional: right | left (left mirrors the list; rows stay left-aligned, ▶ on their left)
+textColor: "#FFFFFF"       # optional: any CSS colour, for the text and the ▶
 normalizeLoudness: true    # optional: level every Track to -14 LUFS
 tracks:                    # order here = play order
   - file: "Shigeru Suzuki - LADY PINK PANTHER.mp3"
@@ -90,7 +90,7 @@ The render stops with an error if a listed file is missing, an MP3 in the folder
 
 - 3840×2160, H.264 + AAC 320 kbps
 - Tracks play in Tracklist order with a 1 s Gap before each (except the first); the ▶ moves when the Gap begins
-- Text: Inter Regular, Noto Sans JP fallback for Japanese, white, `Title - Artist`, list on the right by default
+- Text: Inter Regular, Noto Sans JP fallback for Japanese, `Title - Artist`; by default white and on the right, the list sitting slightly above vertical centre
 - Every Track levelled to −14 LUFS integrated before joining, with true peaks held to −1 dBTP (a Track that would otherwise clip is limited by ffmpeg's two-pass `loudnorm`); `normalizeLoudness: false` leaves the audio untouched
 
 ## Development

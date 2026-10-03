@@ -1,12 +1,13 @@
 import { fontsLoaded, withTracklistPage, type TracklistWindow } from "./browser.js";
-import type { Frame, HorizontalSpan } from "./template.js";
+import type { Frame, HorizontalSpan, TracklistSettings } from "./template.js";
 
 /**
  * Where each row would sit with the Now-Playing Marker beside it, in frame pixels, laid out
- * by the same page the render screenshots.
+ * by the same page, with the same settings, the render screenshots. Each row is placed as if
+ * it were the widest, so on the left side a row's extent depends only on its own width.
  */
-export async function measureTracklistRows(rows: string[], frame: Frame): Promise<HorizontalSpan[]> {
-  const extents = await withTracklistPage(rows, frame, async (page) => {
+export async function measureTracklistRows(rows: string[], settings: TracklistSettings, frame: Frame): Promise<HorizontalSpan[]> {
+  const extents = await withTracklistPage(rows, settings, frame, async (page) => {
     await page.evaluate(() => (window as unknown as TracklistWindow).markAllRows());
     await fontsLoaded(page);
     return page.evaluate(() => (window as unknown as TracklistWindow).rowExtents());
