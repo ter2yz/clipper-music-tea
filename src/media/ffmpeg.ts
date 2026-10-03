@@ -27,3 +27,11 @@ export async function writeConcatList(listFile: string, files: string[]): Promis
   const lines = files.map((file) => `file '${file.replace(/'/g, "'\\''")}'`);
   await writeFile(listFile, lines.join("\n") + "\n");
 }
+
+/** Pixel width of an image (or a video's first video stream). */
+export async function probeWidth(file: string): Promise<number> {
+  const { stdout } = await exec("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width", "-of", "csv=p=0", file]);
+  const width = Number(stdout.trim());
+  if (!Number.isInteger(width) || width <= 0) throw new Error(`ffprobe could not read a width from ${file}`);
+  return width;
+}

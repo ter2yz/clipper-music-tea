@@ -1,19 +1,16 @@
 import path from "node:path";
-import { readEpisode } from "./episode.js";
 import { UserError } from "./errors.js";
 import { renderEpisode } from "./render.js";
-import { checkEpisodeForRender, errorsIn, type Problem } from "./validation.js";
+import { checkEpisodeFolder, errorsIn, type Problem } from "./validation.js";
 
 const USAGE = "Usage: pnpm render <episode-folder>";
 
 async function render(folderArg: string | undefined): Promise<void> {
   if (!folderArg) throw new UserError(USAGE);
   // `pnpm render` runs from the repo root; INIT_CWD is where the user typed the command.
-  const episode = await readEpisode(path.resolve(process.env.INIT_CWD ?? process.cwd(), folderArg));
-
-  const problems = checkEpisodeForRender(episode);
+  const { episode, problems } = await checkEpisodeFolder(path.resolve(process.env.INIT_CWD ?? process.cwd(), folderArg));
   report(problems);
-  if (errorsIn(problems).length > 0) throw new UserError("Render refused.");
+  if (!episode || errorsIn(problems).length > 0) throw new UserError("Render refused.");
 
   const result = await renderEpisode(episode, { log: (line) => console.log(line) });
   console.log(`Video:      ${result.video}`);

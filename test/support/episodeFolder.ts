@@ -31,7 +31,8 @@ export interface FixtureTrack {
 export interface FixtureEpisode {
   tracks: FixtureTrack[];
   approved?: boolean;
-  background?: { file?: string; width: number; height: number };
+  /** `null` leaves the Episode Folder without a Background. */
+  background?: { file?: string; width: number; height: number } | null;
 }
 
 const DEFAULT_BACKGROUND = { file: "background.png", width: 4000, height: 2400 };
@@ -46,8 +47,10 @@ export async function makeEpisodeFolder(episode: FixtureEpisode): Promise<string
 
   await Promise.all(episode.tracks.map((track) => makeToneMp3(path.join(folder, track.file), track)));
 
-  const background = { ...DEFAULT_BACKGROUND, ...episode.background };
-  await makeBackground(path.join(folder, background.file), background.width, background.height);
+  if (episode.background !== null) {
+    const background = { ...DEFAULT_BACKGROUND, ...episode.background };
+    await addImage(folder, background.file, background.width, background.height);
+  }
 
   await writeEpisodeYaml(folder, {
     approved: episode.approved ?? true,
@@ -58,6 +61,18 @@ export async function makeEpisodeFolder(episode: FixtureEpisode): Promise<string
 
 export async function writeEpisodeYaml(folder: string, content: unknown): Promise<void> {
   await writeFile(path.join(folder, "episode.yaml"), stringify(content));
+}
+
+/** Adds a generated MP3 to `folder` (a path relative to the Episode Folder, e.g. `out/old.mp3`) without listing it. */
+export async function addMp3(folder: string, file: string, seconds = 1): Promise<void> {
+  await mkdir(path.dirname(path.join(folder, file)), { recursive: true });
+  await makeToneMp3(path.join(folder, file), { file, seconds, title: "", artist: "" });
+}
+
+/** Adds a plain generated image to `folder` (a path relative to the Episode Folder, e.g. `out/frame.png`). */
+export async function addImage(folder: string, file: string, width = 1000, height = 600): Promise<void> {
+  await mkdir(path.dirname(path.join(folder, file)), { recursive: true });
+  await makeBackground(path.join(folder, file), width, height);
 }
 
 /**
