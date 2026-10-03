@@ -1,4 +1,4 @@
-import type { Episode } from "./episode.js";
+import { EPISODE_FILE, type Episode } from "./episode.js";
 
 /**
  * Something wrong with an Episode. Errors stop a render; warnings are reported but
@@ -18,7 +18,7 @@ export function checkEpisodeForRender(episode: Episode): Problem[] {
   if (!episode.approved) {
     problems.push({
       severity: "error",
-      message: "episode.yaml is not approved. Review the Tracklist (pnpm preview), then set `approved: true` to render.",
+      message: `${EPISODE_FILE} is not approved. Review the Tracklist, then set \`approved: true\` to render.`,
     });
   }
   return problems;

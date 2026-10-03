@@ -6,7 +6,7 @@ const exec = promisify(execFile);
 export interface ProbedVideo {
   durationSeconds: number;
   video: { codec: string; width: number; height: number; pixelFormat: string };
-  audio: { codec: string; bitRate: number; sampleRate: number };
+  audio: { codec: string; bitRate: number };
 }
 
 export async function probeVideo(file: string): Promise<ProbedVideo> {
@@ -17,7 +17,7 @@ export async function probeVideo(file: string): Promise<ProbedVideo> {
   return {
     durationSeconds: Number(info.format.duration),
     video: { codec: v.codec_name, width: v.width, height: v.height, pixelFormat: v.pix_fmt },
-    audio: { codec: a.codec_name, bitRate: Number(a.bit_rate), sampleRate: Number(a.sample_rate) },
+    audio: { codec: a.codec_name, bitRate: Number(a.bit_rate) },
   };
 }
 

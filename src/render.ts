@@ -1,11 +1,11 @@
-import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { displayName, outPath, type Episode } from "./episode.js";
 import { findBackground } from "./episodeFolder.js";
-import { decodeTrack, makeSilence } from "./media/audio.js";
+import { decodeTrack, joinWithGaps } from "./media/audio.js";
 import { probeDurationSeconds } from "./media/ffmpeg.js";
-import { concatEntry, encodeStillSegments, muxEpisode } from "./media/video.js";
+import { encodeStillSegments, muxEpisode } from "./media/video.js";
 import { GAP_SECONDS, planTimeline, timestampsText } from "./timeline.js";
 import { renderTracklistOverlays } from "./tracklist/overlays.js";
 import { VIDEO_FRAME } from "./tracklist/template.js";
@@ -20,9 +20,9 @@ export interface RenderIo {
 }
 
 /**
- * Renders an already-validated Episode into out/video.mp4. Intermediate files live in a
- * temporary work directory; outputs are written under a temporary name and then renamed,
- * so a failed render never leaves a half-written video behind.
+ * Renders an already-validated Episode into out/video.mp4 and out/timestamps.txt. Everything,
+ * outputs included, is built in a temporary work directory that is always removed, so a
+ * failed render leaves out/ as it was.
  */
 export async function renderEpisode(episode: Episode, io: RenderIo): Promise<RenderResult> {
   const background = await findBackground(episode.folder);
@@ -34,15 +34,11 @@ export async function renderEpisode(episode: Episode, io: RenderIo): Promise<Ren
     const durations = await Promise.all(trackWavs.map(probeDurationSeconds));
     const timeline = planTimeline(durations);
 
-    const gapWav = path.join(workDir, "gap.wav");
-    await makeSilence(GAP_SECONDS, gapWav);
-    const audioList = path.join(workDir, "audio.txt");
-    const audioParts = trackWavs.flatMap((wav, i) => (i === 0 ? [wav] : [gapWav, wav]));
-    await writeFile(audioList, audioParts.map(concatEntry).join("\n") + "\n");
+    const audioList = await joinWithGaps(trackWavs, GAP_SECONDS, workDir);
 
     io.log("Drawing Tracklist overlays…");
-    const rows = episode.tracklist.map(displayName);
-    const overlays = await renderTracklistOverlays(rows, VIDEO_FRAME, workDir);
+    const displayNames = episode.tracklist.map(displayName);
+    const overlays = await renderTracklistOverlays(displayNames, VIDEO_FRAME, workDir);
 
     io.log("Encoding video…");
     const videoList = await encodeStillSegments(
@@ -53,17 +49,32 @@ export async function renderEpisode(episode: Episode, io: RenderIo): Promise<Ren
       workDir,
     );
 
+    // Both outputs are finished in the work dir first, then moved into out/ together.
+    const finishedVideo = path.join(workDir, "video.mp4");
+    await muxEpisode(videoList, audioList, finishedVideo);
+    const finishedTimestamps = path.join(workDir, "timestamps.txt");
+    await writeFile(finishedTimestamps, timestampsText(displayNames, timeline));
+
     await mkdir(outPath(episode, ""), { recursive: true });
     const video = outPath(episode, "video.mp4");
-    const partialVideo = outPath(episode, ".video.partial.mp4");
-    await muxEpisode(videoList, audioList, partialVideo);
-    await rename(partialVideo, video);
-
     const timestamps = outPath(episode, "timestamps.txt");
-    await writeFile(timestamps, timestampsText(rows, timeline));
+    await moveFile(finishedVideo, video);
+    await moveFile(finishedTimestamps, timestamps);
 
     return { video, timestamps };
   } finally {
     await rm(workDir, { recursive: true, force: true });
+  }
+}
+
+/** Moves a file into place, falling back to copy when the work dir is on another volume. */
+async function moveFile(from: string, to: string): Promise<void> {
+  try {
+    await rename(from, to);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
+    const partial = `${to}.partial`;
+    await copyFile(from, partial);
+    await rename(partial, to);
   }
 }

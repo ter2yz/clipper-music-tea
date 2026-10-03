@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
@@ -19,4 +20,10 @@ export async function probeDurationSeconds(file: string): Promise<number> {
   const seconds = Number(stdout.trim());
   if (!Number.isFinite(seconds)) throw new Error(`ffprobe could not read a duration from ${file}`);
   return seconds;
+}
+
+/** Writes an ffmpeg concat-demuxer list that plays `files` back to back. */
+export async function writeConcatList(listFile: string, files: string[]): Promise<void> {
+  const lines = files.map((file) => `file '${file.replace(/'/g, "'\\''")}'`);
+  await writeFile(listFile, lines.join("\n") + "\n");
 }

@@ -20,9 +20,10 @@ export const FONT_FILES = { inter: "Inter-Regular.ttf", notoSansJp: "NotoSansJP-
 
 /**
  * House style, as fractions of the frame so it looks the same at any resolution.
- * Measured from the reference Episode (jp-city-pop, 6144×3456): rows sit 1/24 of the frame
- * height apart (≈ 48 px on a 1125 px frame, so 20 rows still fit), the text is half that
- * (72 px at 3456), and the text's left edge is at 63.6 % of the frame width.
+ * Calibrated against the reference Episode (jp-city-pop, 6144×3456) by rendering and
+ * comparing row widths and spacing: rows sit 1/24 of the frame height apart (≈ 47 px on a
+ * 1125 px frame), the font size is half that (72 px at 3456; row widths match to < 1 %),
+ * and the text's left edge is at 63.6 % of the frame width.
  */
 export const HOUSE_STYLE = {
   rowPitch: 1 / 24,

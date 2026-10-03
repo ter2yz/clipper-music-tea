@@ -1,15 +1,14 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import { OUT_DIR } from "./episode.js";
 import { UserError } from "./errors.js";
 
 const BACKGROUND_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 
-/** Image files at the top level of the Episode Folder (out/ is never an input). */
+/** Image files at the top level of the Episode Folder (so nothing inside out/ is an input). */
 export async function findBackgroundCandidates(folder: string): Promise<string[]> {
   const entries = await readdir(folder, { withFileTypes: true });
   return entries
-    .filter((e) => e.isFile() && e.name !== OUT_DIR && BACKGROUND_EXTENSIONS.has(path.extname(e.name).toLowerCase()))
+    .filter((e) => e.isFile() && BACKGROUND_EXTENSIONS.has(path.extname(e.name).toLowerCase()))
     .map((e) => path.join(folder, e.name))
     .sort();
 }

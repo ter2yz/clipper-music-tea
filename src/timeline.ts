@@ -4,8 +4,6 @@ export const GAP_SECONDS = 1;
 export interface Timeline {
   /** Track Start of each Track, in play order: where its Gap begins (0 for the first Track). */
   trackStarts: number[];
-  /** Length of each Track's segment of the video: its Gap (if any) plus the Track itself. */
-  segmentSeconds: number[];
   totalSeconds: number;
 }
 
@@ -16,15 +14,13 @@ export interface Timeline {
  */
 export function planTimeline(trackDurations: number[]): Timeline {
   const trackStarts: number[] = [];
-  const segmentSeconds: number[] = [];
-  let cursor = 0;
+  let elapsed = 0;
   trackDurations.forEach((duration, index) => {
     const gap = index === 0 ? 0 : GAP_SECONDS;
-    trackStarts.push(cursor);
-    segmentSeconds.push(gap + duration);
-    cursor += gap + duration;
+    trackStarts.push(elapsed);
+    elapsed += gap + duration;
   });
-  return { trackStarts, segmentSeconds, totalSeconds: cursor };
+  return { trackStarts, totalSeconds: elapsed };
 }
 
 /** `MM:SS`, or `H:MM:SS` from one hour on. Rounds down, so a chapter link never lands after its Track Start. */
