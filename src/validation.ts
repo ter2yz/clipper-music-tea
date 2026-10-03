@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import type { Browser } from "playwright";
 import { parse } from "yaml";
 import { isCssColour } from "./cssColour.js";
 import { displayName, EPISODE_FILE, type Episode, type TracklistEntry } from "./episode.js";
@@ -20,6 +21,16 @@ export interface Problem {
 
 const MAX_TRACKS = 20;
 
+export interface CheckOptions {
+  /**
+   * Whether an unapproved episode.yaml is an error (default true). Render requires approval;
+   * Preview exists to review an unapproved Tracklist, so it skips that one rule.
+   */
+  requireApproval?: boolean;
+  /** A browser to lay out the Tracklist in for the width check, kept open between checks (Preview); otherwise one is launched per check. */
+  browser?: Browser;
+}
+
 export interface EpisodeCheck {
   /** The Episode as far as episode.yaml could be read; absent when it can't be read at all. */
   episode: Episode | undefined;
@@ -31,7 +42,7 @@ export interface EpisodeCheck {
  * than stopping at the first failure, so the user can fix everything in one pass. Rendering
  * refuses on any error; Preview shows the same list.
  */
-export async function checkEpisodeFolder(folder: string): Promise<EpisodeCheck> {
+export async function checkEpisodeFolder(folder: string, { requireApproval = true, browser }: CheckOptions = {}): Promise<EpisodeCheck> {
   const contents = await listEpisodeFolder(folder);
   const yaml = await readEpisodeYaml(folder);
   const problems = new ProblemList();
@@ -47,8 +58,7 @@ export async function checkEpisodeFolder(folder: string): Promise<EpisodeCheck> 
 
   if (typeof doc.approved !== "boolean") {
     error(`${EPISODE_FILE}: \`approved\` is required and must be true or false.`);
-  } else if (!doc.approved) {
-    // Render-only: Preview exists to review an unapproved Tracklist, so it should skip this one.
+  } else if (!doc.approved && requireApproval) {
     error(`${EPISODE_FILE} is not approved. Review the Tracklist, then set \`approved: true\` to render.`);
   }
 
@@ -66,7 +76,7 @@ export async function checkEpisodeFolder(folder: string): Promise<EpisodeCheck> 
     return entry.entry;
   });
   checkTracksAgainstFolder(tracklist, contents, error);
-  await checkDisplayNames(tracklist, settings, error);
+  await checkDisplayNames(tracklist, settings, error, browser);
 
   return { episode: { folder, approved: doc.approved === true, ...settings, normalizeLoudness: doc.normalizeLoudness !== false, tracklist }, problems: problems.all };
 }
@@ -111,7 +121,7 @@ function checkTracksAgainstFolder(tracklist: TracklistEntry[], contents: Episode
  * Now-Playing Marker beside it, must fit inside the frame's safe area. Rows missing a title or
  * artist are already reported and are skipped here.
  */
-async function checkDisplayNames(tracklist: TracklistEntry[], settings: TracklistSettings, error: Report): Promise<void> {
+async function checkDisplayNames(tracklist: TracklistEntry[], settings: TracklistSettings, error: Report, browser: Browser | undefined): Promise<void> {
   const named = tracklist.flatMap((entry, i) => (entry.title.trim() && entry.artist.trim() ? [{ track: i + 1, name: displayName(entry) }] : []));
 
   for (const { track, name } of named) {
@@ -123,7 +133,7 @@ async function checkDisplayNames(tracklist: TracklistEntry[], settings: Tracklis
 
   if (named.length === 0) return;
   const safe = safeArea(VIDEO_FRAME);
-  const extents = await measureTracklistRows(named.map((row) => row.name), settings, VIDEO_FRAME);
+  const extents = await measureTracklistRows(named.map((row) => row.name), settings, VIDEO_FRAME, browser);
   named.forEach(({ track, name }, i) => {
     const { left, right } = extents[i]!;
     const overflow = Math.ceil(Math.max(safe.left - left, right - safe.right));

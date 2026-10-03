@@ -2,7 +2,7 @@
 
 Turns a folder of MP3s plus one background image into a 4K YouTube music video: the song list is shown over the image, with a ▶ marking the song now playing.
 
-> **Status:** `pnpm render` works, including every validation rule below and all Episode Settings (`side`, `textColor`, `normalizeLoudness`). Preview and the `/episode` skill are still to come. The rest of this page is the planned workflow.
+> **Status:** `pnpm render` and `pnpm preview` work, including every validation rule below and all Episode Settings (`side`, `textColor`, `normalizeLoudness`). The `/episode` skill is still to come. The rest of this page is the planned workflow.
 > Vocabulary: [`CONTEXT.md`](./CONTEXT.md). Decisions: [`docs/adr/`](./docs/adr/).
 
 ## Making an Episode — what to do next
@@ -41,7 +41,7 @@ Claude reads tags, filenames and durations, then writes `episode.yaml` with:
 pnpm preview path/to/my-episode
 ```
 
-Opens the frame in your browser exactly as it will render. Use **← / →** to move the ▶ through every Track. Edit `episode.yaml` (names, order, `side`, `textColor`, `normalizeLoudness`) — the page reloads on save and shows any warnings (row too wide, unsupported characters, small Background).
+Opens the frame in your browser exactly as it will render (add `--no-open` to just print the URL; Ctrl+C stops it). Use **← / →** to move the ▶ through every Track. Edit `episode.yaml` (names, order, `side`, `textColor`, `normalizeLoudness`) — the page reloads on save and shows any warnings (row too wide, unsupported characters, small Background).
 
 ### 4. Approve
 

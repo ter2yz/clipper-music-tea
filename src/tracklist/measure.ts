@@ -1,3 +1,4 @@
+import type { Browser } from "playwright";
 import { fontsLoaded, withTracklistPage, type TracklistWindow } from "./browser.js";
 import type { Frame, HorizontalSpan, TracklistSettings } from "./template.js";
 
@@ -5,9 +6,10 @@ import type { Frame, HorizontalSpan, TracklistSettings } from "./template.js";
  * Where each row would sit with the Now-Playing Marker beside it, in frame pixels, laid out
  * by the same page, with the same settings, the render screenshots. Each row is placed as if
  * it were the widest, so on the left side a row's extent depends only on its own width.
+ * Pass `browser` to lay out in an already-running browser instead of launching one.
  */
-export async function measureTracklistRows(rows: string[], settings: TracklistSettings, frame: Frame): Promise<HorizontalSpan[]> {
-  const extents = await withTracklistPage(rows, settings, frame, async (page) => {
+export async function measureTracklistRows(rows: string[], settings: TracklistSettings, frame: Frame, browser?: Browser): Promise<HorizontalSpan[]> {
+  const extents = await withTracklistPage(rows, settings, frame, browser, async (page) => {
     await page.evaluate(() => (window as unknown as TracklistWindow).markAllRows());
     await fontsLoaded(page);
     return page.evaluate(() => (window as unknown as TracklistWindow).rowExtents());

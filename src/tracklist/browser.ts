@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { chromium, type Browser, type Page } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { FONTS_DIR, tracklistPage, type Frame, type TracklistSettings } from "./template.js";
 
 /** What the template page exposes on `window` (see tracklistPage). */
@@ -20,21 +20,26 @@ export interface TracklistWindow {
 /**
  * Loads the shared Tracklist template in headless Chromium at the frame's size, with the
  * bundled fonts loaded, and hands the page to `use`. Render and the width check both go
- * through here with the Episode's settings, so they lay text out identically.
+ * through here with the Episode's settings, so they lay text out identically. With `browser`,
+ * the page opens in that already-running browser (Preview keeps one open so each check is
+ * quick); otherwise a browser is launched for this page alone.
  */
-export async function withTracklistPage<T>(rows: string[], settings: TracklistSettings, frame: Frame, use: (page: Page) => Promise<T>): Promise<T> {
+export async function withTracklistPage<T>(rows: string[], settings: TracklistSettings, frame: Frame, browser: Browser | undefined, use: (page: Page) => Promise<T>): Promise<T> {
   const pageDir = await mkdtemp(path.join(tmpdir(), "clipper-tracklist-"));
-  let browser: Browser | undefined;
+  let launched: Browser | undefined;
+  let context: BrowserContext | undefined;
   try {
     const pageFile = path.join(pageDir, "tracklist.html");
     await writeFile(pageFile, tracklistPage({ rows, markedRow: 0, settings, frame, fontBaseUrl: pathToFileURL(FONTS_DIR).href }));
-    browser = await chromium.launch();
-    const page = await browser.newPage({ viewport: frame, deviceScaleFactor: 1 });
+    if (!browser) browser = launched = await chromium.launch();
+    context = await browser.newContext({ viewport: frame, deviceScaleFactor: 1 });
+    const page = await context.newPage();
     await page.goto(pathToFileURL(pageFile).href);
     await fontsLoaded(page);
     return await use(page);
   } finally {
-    await browser?.close();
+    await context?.close();
+    await launched?.close();
     await rm(pageDir, { recursive: true, force: true });
   }
 }

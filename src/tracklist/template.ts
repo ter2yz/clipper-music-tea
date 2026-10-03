@@ -1,6 +1,6 @@
 /**
  * The one Tracklist template (ADR 0002). Render screenshots it into a transparent PNG per
- * Now-Playing Marker position; Preview will serve the very same page. Anything that changes
+ * Now-Playing Marker position; Preview serves the very same page. Anything that changes
  * how the Tracklist looks belongs here, so the two can never drift apart.
  */
 
