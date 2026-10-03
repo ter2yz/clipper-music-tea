@@ -2,9 +2,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { isCssColour } from "./cssColour.js";
-import { EPISODE_FILE, type Episode, type TracklistEntry } from "./episode.js";
+import { displayName, EPISODE_FILE, type Episode, type TracklistEntry } from "./episode.js";
 import { probeWidth } from "./media/ffmpeg.js";
-import { VIDEO_FRAME } from "./tracklist/template.js";
+import { charactersFontsCannotDraw, describeCharacter } from "./tracklist/fontCoverage.js";
+import { measureTracklistRows } from "./tracklist/measure.js";
+import { safeArea, VIDEO_FRAME } from "./tracklist/template.js";
 import { listEpisodeFolder, type EpisodeFolderContents } from "./episodeFolder.js";
 
 /**
@@ -64,6 +66,7 @@ export async function checkEpisodeFolder(folder: string): Promise<EpisodeCheck> 
     return entry.entry;
   });
   checkTracksAgainstFolder(tracklist, contents, error);
+  await checkDisplayNames(tracklist, error);
 
   return { episode: { folder, approved: doc.approved === true, tracklist }, problems: problems.all };
 }
@@ -88,12 +91,46 @@ function checkTracksAgainstFolder(tracklist: TracklistEntry[], contents: Episode
       error(`Track ${i + 1} "${entry.file}" is listed in ${EPISODE_FILE} but there is no such MP3 in the Episode Folder.`);
     }
   });
-  const listed = new Set(tracklist.map((entry) => entry.file));
+  const positions = new Map<string, number[]>();
+  tracklist.forEach((entry, i) => {
+    if (entry.file) positions.set(entry.file, [...(positions.get(entry.file) ?? []), i + 1]);
+  });
+  for (const [file, tracks] of positions) {
+    if (tracks.length > 1) error(`"${file}" is listed more than once in ${EPISODE_FILE} (Tracks ${listInWords(tracks.map(String))}). List each Track once.`);
+  }
+  const listed = new Set(positions.keys());
   for (const file of contents.tracks) {
     if (!listed.has(file)) {
       error(`"${file}" is in the Episode Folder but not listed in ${EPISODE_FILE}. List it under \`tracks:\` or move it out of the folder.`);
     }
   }
+}
+
+/**
+ * Text safety: every Display Name must be drawable by the bundled fonts, and every row, with the
+ * Now-Playing Marker beside it, must fit inside the frame's safe area. Rows missing a title or
+ * artist are already reported and are skipped here.
+ */
+async function checkDisplayNames(tracklist: TracklistEntry[], error: Report): Promise<void> {
+  const named = tracklist.flatMap((entry, i) => (entry.title.trim() && entry.artist.trim() ? [{ track: i + 1, name: displayName(entry) }] : []));
+
+  for (const { track, name } of named) {
+    const undrawable = charactersFontsCannotDraw(name);
+    if (undrawable.length > 0) {
+      error(`Track ${track} "${name}" has characters neither Inter nor Noto Sans JP can draw: ${undrawable.map(describeCharacter).join(", ")}. Replace them or write the name another way.`);
+    }
+  }
+
+  if (named.length === 0) return;
+  const safe = safeArea(VIDEO_FRAME);
+  const extents = await measureTracklistRows(named.map((row) => row.name), VIDEO_FRAME);
+  named.forEach(({ track, name }, i) => {
+    const { left, right } = extents[i]!;
+    const overflow = Math.ceil(Math.max(safe.left - left, right - safe.right));
+    if (overflow > 0) {
+      error(`Track ${track} "${name}" is too wide for the frame: with the ▶ it runs ${overflow} px past the safe area. Shorten its title or artist.`);
+    }
+  });
 }
 
 function checkEpisodeSettings(doc: Record<string, unknown>, error: Report): void {

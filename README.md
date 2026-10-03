@@ -2,7 +2,7 @@
 
 Turns a folder of MP3s plus one background image into a 4K YouTube music video: the song list is shown over the image, with a ▶ marking the song now playing.
 
-> **Status:** `pnpm render` works (approval check only — the other validation rules, loudness levelling, Episode Settings, Preview and the `/episode` skill are still to come). The rest of this page is the planned workflow.
+> **Status:** `pnpm render` works, including every validation rule below (Episode Settings are checked but not yet applied). Loudness levelling, Preview and the `/episode` skill are still to come. The rest of this page is the planned workflow.
 > Vocabulary: [`CONTEXT.md`](./CONTEXT.md). Decisions: [`docs/adr/`](./docs/adr/).
 
 ## Making an Episode — what to do next
@@ -84,7 +84,7 @@ tracks:                    # order here = play order
     artist: "鈴木茂"
 ```
 
-The render stops with an error if a listed file is missing, an MP3 in the folder isn't listed, there isn't exactly one image, there are more than 20 Tracks, a Display Name is too wide for the frame, or a Display Name has characters the fonts can't draw. Preview shows the same problems as warnings.
+The render stops with an error if a listed file is missing, an MP3 in the folder isn't listed, there isn't exactly one image, there are more than 20 Tracks, a file is listed twice, a Display Name (with its ▶) runs outside the frame's safe area (5 % in from each side), or a Display Name has characters the fonts can't draw. Preview shows the same problems as warnings.
 
 ## What the video does
 

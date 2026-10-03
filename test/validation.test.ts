@@ -29,6 +29,20 @@ describe("pnpm render refuses an Episode Folder that doesn't match episode.yaml"
     await expectRefusal(folder, ['Track 2 "b.mp3" is listed in episode.yaml but there is no such MP3 in the Episode Folder.']);
   });
 
+  it("names a Track listed more than once, and where", async () => {
+    const folder = await makeEpisodeFolder({ tracks: [track("a.mp3"), track("b.mp3")] });
+    await writeEpisodeYaml(folder, {
+      approved: true,
+      tracks: [
+        { file: "a.mp3", title: "A", artist: "Someone" },
+        { file: "b.mp3", title: "B", artist: "Someone" },
+        { file: "a.mp3", title: "A again", artist: "Someone" },
+      ],
+    });
+
+    await expectRefusal(folder, ['"a.mp3" is listed more than once in episode.yaml (Tracks 1 and 3). List each Track once.']);
+  });
+
   it("names an MP3 in the folder that episode.yaml doesn't list", async () => {
     const folder = await makeEpisodeFolder({ tracks: [track("a.mp3")] });
     await addMp3(folder, "extra.mp3");
@@ -188,5 +202,55 @@ describe("the out/ folder", () => {
     expect(result.stderr).toBe("");
     expect(result.exitCode).toBe(0);
     expect(existsSync(path.join(folder, "out", "video.mp4"))).toBe(true);
+  });
+});
+
+describe("pnpm render refuses Display Names that would not draw safely", () => {
+  it("names a row with characters neither bundled font can draw, and the characters", async () => {
+    const folder = await makeEpisodeFolder({
+      tracks: [
+        { ...track("a.mp3"), title: "Plastic Love", artist: "竹内まりや" },
+        { ...track("b.mp3"), title: "봄날 🌸", artist: "BTS" },
+      ],
+    });
+
+    await expectRefusal(folder, [
+      'Track 2 "봄날 🌸 - BTS" has characters neither Inter nor Noto Sans JP can draw: "봄" (U+BD04), "날" (U+B0A0), "🌸" (U+1F338). Replace them or write the name another way.',
+    ]);
+  });
+
+  it("lets Japanese mixed with Latin through, and renders it", async () => {
+    const folder = await makeEpisodeFolder({
+      tracks: [
+        { ...track("a.mp3"), title: "すてきなメゾン feat. 玉城ティナ", artist: "tofubeats" },
+        { ...track("b.mp3"), title: "異端なスター", artist: "Official髭男dism" },
+        { ...track("c.mp3"), title: "LADY PINK PANTHER", artist: "鈴木茂" },
+      ],
+    });
+
+    const result = await runCli("render", folder);
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(existsSync(path.join(folder, "out", "video.mp4"))).toBe(true);
+  });
+
+  it("names a row too wide for the frame's safe area", async () => {
+    const long = "Midnight Pretenders (Extended Club Mix featuring Everyone We Know)";
+    const folder = await makeEpisodeFolder({
+      tracks: [
+        { ...track("a.mp3"), title: "Plastic Love", artist: "竹内まりや" },
+        { ...track("b.mp3"), title: long, artist: "亜蘭知子" },
+      ],
+    });
+
+    const result = await runCli("render", folder);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toMatch(
+      new RegExp(`^Error: Track 2 "${long.replace(/[()]/g, "\\$&")} - 亜蘭知子" is too wide for the frame: with the ▶ it runs \\d+ px past the safe area\\. Shorten its title or artist\\.$`, "m"),
+    );
+    expect(result.stderr).not.toContain("Track 1");
+    expect(result.stderr).toContain("Render refused.");
   });
 });

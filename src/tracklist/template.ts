@@ -37,6 +37,22 @@ export const HOUSE_STYLE = {
   markerScale: 0.62,
 } as const;
 
+export interface HorizontalSpan {
+  left: number;
+  right: number;
+}
+
+/**
+ * Tracklist text must stay inside the frame inset by 5 % of its width on the left and right
+ * (the "graphics safe" margin of EBU R 95), so it survives TV overscan and never touches the
+ * frame edge. The width check compares each row's measured extent, ▶ included, against this;
+ * it holds the same for a list on either side.
+ */
+export function safeArea(frame: Frame): HorizontalSpan {
+  const inset = 0.05 * frame.width;
+  return { left: inset, right: frame.width - inset };
+}
+
 export interface TracklistPageOptions {
   /** Display Names in play order. */
   rows: string[];
@@ -50,7 +66,8 @@ export interface TracklistPageOptions {
 /**
  * A complete HTML page drawing the Tracklist on a transparent background. The page exposes
  * `window.setMarkedRow(index)` so one loaded page can be stepped through every
- * Now-Playing Marker position without reloading fonts.
+ * Now-Playing Marker position without reloading fonts, and `markAllRows()` / `rowExtents()`
+ * for the width check (see TracklistWindow in browser.ts).
  */
 export function tracklistPage({ rows, markedRow, frame, fontBaseUrl }: TracklistPageOptions): string {
   const px = (fraction: number) => `${(fraction * frame.height).toFixed(3)}px`;
@@ -118,9 +135,25 @@ export function tracklistPage({ rows, markedRow, frame, fontBaseUrl }: Tracklist
       ${items}
     </ol>
     <script>
+      const rows = () => [...document.querySelectorAll(".tracklist li")];
       window.setMarkedRow = (index) => {
-        document.querySelectorAll(".tracklist li").forEach((li, i) => li.classList.toggle("now-playing", i === index));
+        rows().forEach((li, i) => li.classList.toggle("now-playing", i === index));
       };
+      // For the width check: every row wears the ▶ at once (it is absolutely positioned, so
+      // this moves nothing), then each row reports its extent from the ▶'s left edge to the
+      // end of its text. A pseudo-element has no box to query, so the ▶'s left edge comes from
+      // its computed width and gap.
+      window.markAllRows = () => {
+        rows().forEach((li) => li.classList.add("now-playing"));
+      };
+      window.rowExtents = () =>
+        rows().map((li) => {
+          const range = document.createRange();
+          range.selectNodeContents(li);
+          const text = range.getBoundingClientRect();
+          const marker = getComputedStyle(li, "::before");
+          return { left: text.left - parseFloat(marker.width) - parseFloat(marker.marginRight), right: text.right };
+        });
     </script>
   </body>
 </html>
