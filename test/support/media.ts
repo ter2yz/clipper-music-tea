@@ -87,3 +87,35 @@ export function markedRowIndex(rows: TextRow[]): number {
   if (marked.length !== 1) throw new Error(`Expected exactly one marked row, found ${marked.length}: ${JSON.stringify(rows)}`);
   return marked[0]!;
 }
+
+export interface Loudness {
+  /** Integrated loudness, LUFS (−Infinity for digital silence). */
+  integrated: number;
+  /** True peak, dBTP (−Infinity for digital silence). */
+  truePeak: number;
+}
+
+/**
+ * EBU R128 loudness of the audio between `fromSeconds` and `toSeconds` (the whole file when
+ * omitted). Read from loudnorm's measuring pass, whose meter is a separate implementation from
+ * the ebur128 filter the render measures Tracks with, so a misreading meter can't hide itself.
+ */
+export async function measureLoudness(file: string, fromSeconds?: number, toSeconds?: number): Promise<Loudness> {
+  const range = fromSeconds === undefined ? [] : ["-ss", String(fromSeconds), "-to", String(toSeconds)];
+  const { stderr } = await exec("ffmpeg", ["-hide_banner", "-nostats", ...range, "-i", file, "-vn", "-af", "loudnorm=print_format=json", "-f", "null", "-"]);
+  const stats = JSON.parse(stderr.slice(stderr.lastIndexOf("{"), stderr.lastIndexOf("}") + 1)) as Record<string, string>;
+  const decibels = (value: string | undefined): number => {
+    const number = value === "-inf" ? -Infinity : Number(value);
+    if (Number.isNaN(number)) throw new Error(`Could not read loudness of ${file}:\n${JSON.stringify(stats)}`);
+    return number;
+  };
+  return { integrated: decibels(stats.input_i), truePeak: decibels(stats.input_tp) };
+}
+
+/** Stretches of (near-)digital silence at least `minSeconds` long, as [start, end] in seconds. */
+export async function findSilences(file: string, minSeconds: number): Promise<Array<[number, number]>> {
+  const { stderr } = await exec("ffmpeg", ["-hide_banner", "-nostats", "-i", file, "-vn", "-af", `silencedetect=noise=-80dB:d=${minSeconds}`, "-f", "null", "-"]);
+  const starts = [...stderr.matchAll(/silence_start: ([\d.]+)/g)].map((m) => Number(m[1]));
+  const ends = [...stderr.matchAll(/silence_end: ([\d.]+)/g)].map((m) => Number(m[1]));
+  return starts.map((start, i) => [start, ends[i] ?? Number.NaN]);
+}

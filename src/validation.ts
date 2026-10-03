@@ -68,7 +68,7 @@ export async function checkEpisodeFolder(folder: string): Promise<EpisodeCheck> 
   checkTracksAgainstFolder(tracklist, contents, error);
   await checkDisplayNames(tracklist, error);
 
-  return { episode: { folder, approved: doc.approved === true, tracklist }, problems: problems.all };
+  return { episode: { folder, approved: doc.approved === true, normalizeLoudness: doc.normalizeLoudness !== false, tracklist }, problems: problems.all };
 }
 
 /** Collects Problems; `error` and `warn` can be passed around on their own. */

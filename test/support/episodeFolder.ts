@@ -16,11 +16,15 @@ export interface FixtureTrack {
   seconds: number;
   /**
    * What the Track sounds like (default `tone`). `noise` is dense stereo noise, enough to fill
-   * a 320 kbps AAC stream; `silence` is fast to generate even for hour-long Tracks.
+   * a 320 kbps AAC stream; `silence` is fast to generate even for hour-long Tracks; `peaky` is
+   * a quiet, swelling tone with short loud bursts — its peaks sit far above its loudness, like
+   * an old, gently mastered recording.
    */
-  signal?: "tone" | "noise" | "silence";
+  signal?: "tone" | "noise" | "silence" | "peaky";
   /** Tone frequency in Hz (for `tone`). */
   frequency?: number;
+  /** Gain applied to the signal in dB (default 0), to make deliberately quiet or loud Tracks. */
+  gainDb?: number;
   /** Display Name parts written to episode.yaml. */
   title: string;
   artist: string;
@@ -31,6 +35,8 @@ export interface FixtureTrack {
 export interface FixtureEpisode {
   tracks: FixtureTrack[];
   approved?: boolean;
+  /** Episode Settings written to episode.yaml (left out when not given, so the defaults apply). */
+  settings?: { normalizeLoudness?: boolean };
   /** `null` leaves the Episode Folder without a Background. */
   background?: { file?: string; width: number; height: number } | null;
 }
@@ -54,6 +60,7 @@ export async function makeEpisodeFolder(episode: FixtureEpisode): Promise<string
 
   await writeEpisodeYaml(folder, {
     approved: episode.approved ?? true,
+    ...episode.settings,
     tracks: episode.tracks.map(({ file, title, artist }) => ({ file, title, artist })),
   });
   return folder;
@@ -80,7 +87,7 @@ export async function addImage(folder: string, file: string, width = 1000, heigh
  * hour-long fixture is only made once per machine.
  */
 async function makeToneMp3(file: string, track: FixtureTrack): Promise<void> {
-  const recipe = JSON.stringify([track.signal ?? "tone", track.seconds, track.frequency ?? 440, track.tags ?? {}]);
+  const recipe = JSON.stringify([track.signal ?? "tone", track.seconds, track.frequency ?? 440, track.gainDb ?? 0, track.tags ?? {}]);
   const cached = path.join(cacheDir, `${createHash("sha1").update(recipe).digest("hex")}.mp3`);
   if (!existsSync(cached)) {
     const partial = `${cached}.${randomUUID()}.partial.mp3`;
@@ -99,11 +106,17 @@ async function generateMp3(file: string, track: FixtureTrack): Promise<void> {
       `anoisesrc=d=${d}:c=white:a=0.3:r=44100:s=1[l];anoisesrc=d=${d}:c=white:a=0.3:r=44100:s=2[r];[l][r]amerge=inputs=2[out0]`,
       "-b:a", "192k",
     ],
+    peaky: [
+      "-f", "lavfi", "-i",
+      `aevalsrc=0.08*sin(2*PI*220*t)*(1+0.8*sin(2*PI*0.5*t))+if(lt(mod(t\\,0.5)\\,0.01)\\,0.6*sin(2*PI*80*t)\\,0):s=44100:d=${d}`,
+      "-b:a", "192k",
+    ],
     // Low sample rate and bitrate so hour-long fixtures take seconds to make.
     silence: ["-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", String(d), "-b:a", "8k"],
   };
+  const gain = track.gainDb ? ["-af", `volume=${track.gainDb}dB`] : [];
   const tags = Object.entries(track.tags ?? {}).flatMap(([key, value]) => ["-metadata", `${key}=${value}`]);
-  await exec("ffmpeg", ["-v", "error", "-y", ...sources[track.signal ?? "tone"], "-c:a", "libmp3lame", ...tags, file]);
+  await exec("ffmpeg", ["-v", "error", "-y", ...sources[track.signal ?? "tone"], ...gain, "-c:a", "libmp3lame", ...tags, file]);
 }
 
 /** A plain dark image, so white Tracklist text is easy to find in sampled frames. */

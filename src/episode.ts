@@ -11,7 +11,9 @@ export interface TracklistEntry {
 export interface Episode {
   folder: string;
   approved: boolean;
-  // Episode Settings (side, textColor, normalizeLoudness) are read here once they're supported.
+  // Episode Settings. side and textColor are read here once they're supported.
+  /** Level every Track to the house loudness before joining (default true). */
+  normalizeLoudness: boolean;
   /** In play order. */
   tracklist: TracklistEntry[];
 }

@@ -28,9 +28,9 @@ export async function renderEpisode(episode: Episode, io: RenderIo): Promise<Ren
   const background = await findBackground(episode.folder);
   const workDir = await mkdtemp(path.join(tmpdir(), "clipper-render-"));
   try {
-    io.log(`Decoding ${episode.tracklist.length} Tracks…`);
+    io.log(`Decoding ${episode.tracklist.length} Tracks${episode.normalizeLoudness ? " and levelling their loudness" : ""}…`);
     const trackWavs = episode.tracklist.map((_, i) => path.join(workDir, `track-${i + 1}.wav`));
-    await Promise.all(episode.tracklist.map((entry, i) => decodeTrack(path.join(episode.folder, entry.file), trackWavs[i]!)));
+    await Promise.all(episode.tracklist.map((entry, i) => decodeTrack(path.join(episode.folder, entry.file), trackWavs[i]!, { normalizeLoudness: episode.normalizeLoudness })));
     const durations = await Promise.all(trackWavs.map(probeDurationSeconds));
     const timeline = planTimeline(durations);
 
