@@ -1,1 +1,94 @@
 # clipper-music-tea
+
+Turns a folder of MP3s plus one background image into a 4K YouTube music video: the song list is shown over the image, with a ▶ marking the song now playing.
+
+> **Status:** design agreed, not built yet. The commands below are the planned workflow.
+> Vocabulary: [`CONTEXT.md`](./CONTEXT.md). Decisions: [`docs/adr/`](./docs/adr/).
+
+## Making an Episode — what to do next
+
+### 1. Prepare the Episode Folder
+
+One folder per video, containing:
+
+- every Track as an `.mp3` (up to 20)
+- exactly **one** Background image (ideally ≥ 3840 px wide, or the tool warns it will look soft)
+
+```
+my-episode/
+├── Shigeru Suzuki - LADY PINK PANTHER.mp3
+├── Suchmos - Pinkvibes.mp3
+├── ...
+└── background.jpeg
+```
+
+### 2. Ask Claude to propose the Tracklist
+
+```
+/episode path/to/my-episode
+```
+
+Claude reads tags, filenames and durations, then writes `episode.yaml` with:
+
+- each Track's **Display Name** (title + artist, in original script — tags are often wrong)
+- a suggested running order, with a one-line reason per position as a comment
+- a flag on any name it isn't sure about
+- `approved: false`
+
+### 3. Preview and fix
+
+```
+pnpm preview path/to/my-episode
+```
+
+Opens the frame in your browser exactly as it will render. Use **← / →** to move the ▶ through every Track. Edit `episode.yaml` (names, order, `side`, `textColor`, `normalizeLoudness`) — the page reloads on save and shows any warnings (row too wide, unsupported characters, small Background).
+
+### 4. Approve
+
+In `episode.yaml`, set:
+
+```yaml
+approved: true
+```
+
+### 5. Render and draft the description
+
+```
+/episode path/to/my-episode
+```
+
+Seeing the approval, Claude runs the render and writes the description draft. Output lands in `my-episode/out/`:
+
+| File | Made by | Overwritten on re-render? |
+|---|---|---|
+| `video.mp4` | tool | yes |
+| `timestamps.txt` | tool | yes |
+| `description.md` | Claude — title options + description with Timestamps | **never** |
+
+Rendering without AI: `pnpm render path/to/my-episode` (requires `approved: true`).
+
+### 6. Upload
+
+Upload `video.mp4` to YouTube by hand; copy title/description from `description.md`.
+
+## `episode.yaml` reference
+
+```yaml
+approved: false            # render refuses until true
+side: right                # optional: right | left
+textColor: "#FFFFFF"       # optional
+normalizeLoudness: true    # optional: level every Track to -14 LUFS
+tracks:                    # order here = play order
+  - file: "Shigeru Suzuki - LADY PINK PANTHER.mp3"
+    title: "LADY PINK PANTHER"
+    artist: "鈴木茂"
+```
+
+The render stops with an error if a listed file is missing, an MP3 in the folder isn't listed, there isn't exactly one image, there are more than 20 Tracks, a Display Name is too wide for the frame, or a Display Name has characters the fonts can't draw. Preview shows the same problems as warnings.
+
+## What the video does
+
+- 3840×2160, H.264 + AAC 320 kbps
+- Tracks play in Tracklist order with a 1 s Gap before each (except the first); the ▶ moves when the Gap begins
+- Text: Inter Regular, Noto Sans JP fallback for Japanese, white, `Title - Artist`, list on the right by default
+- Loudness levelled to −14 LUFS unless turned off
