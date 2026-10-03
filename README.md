@@ -2,7 +2,7 @@
 
 Turns a folder of MP3s plus one background image into a 4K YouTube music video: the song list is shown over the image, with a ▶ marking the song now playing.
 
-> **Status:** design agreed, not built yet. The commands below are the planned workflow.
+> **Status:** `pnpm render` works (approval check only — the other validation rules, loudness levelling, Episode Settings, Preview and the `/episode` skill are still to come). The rest of this page is the planned workflow.
 > Vocabulary: [`CONTEXT.md`](./CONTEXT.md). Decisions: [`docs/adr/`](./docs/adr/).
 
 ## Making an Episode — what to do next
@@ -92,3 +92,16 @@ The render stops with an error if a listed file is missing, an MP3 in the folder
 - Tracks play in Tracklist order with a 1 s Gap before each (except the first); the ▶ moves when the Gap begins
 - Text: Inter Regular, Noto Sans JP fallback for Japanese, white, `Title - Artist`, list on the right by default
 - Loudness levelled to −14 LUFS unless turned off
+
+## Development
+
+Requires Node 22, pnpm, and `ffmpeg`/`ffprobe` on `PATH`.
+
+```
+pnpm install
+pnpm exec playwright install chromium   # the browser that draws the Tracklist
+pnpm test                               # drives the CLI on generated Episode Folders (≈ 1 min)
+pnpm typecheck
+```
+
+Bundled fonts (SIL Open Font License, licences alongside): `assets/fonts/Inter-Regular.ttf` (Inter 4.1, rsms/inter) and `assets/fonts/NotoSansJP-Regular.otf` (notofonts/noto-cjk).
