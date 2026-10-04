@@ -38,10 +38,7 @@ export async function probeSampleCount(file: string): Promise<number> {
 
 /** Duration in seconds, as ffprobe reports it for the container. */
 export async function probeDurationSeconds(file: string): Promise<number> {
-  const { stdout } = await exec("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]);
-  const seconds = Number(stdout.trim());
-  if (!Number.isFinite(seconds)) throw new Error(`ffprobe could not read a duration from ${file}`);
-  return seconds;
+  return (await probeDurationAndTags(file)).durationSeconds;
 }
 
 /** Writes an ffmpeg concat-demuxer list that plays `files` back to back. */
@@ -56,4 +53,14 @@ export async function probeWidth(file: string): Promise<number> {
   const width = Number(stdout.trim());
   if (!Number.isInteger(width) || width <= 0) throw new Error(`ffprobe could not read a width from ${file}`);
   return width;
+}
+
+/** Container duration in seconds and its embedded tags (keys lower-cased), as ffprobe reports them. */
+export async function probeDurationAndTags(file: string): Promise<{ durationSeconds: number; tags: Record<string, string> }> {
+  const { stdout } = await exec("ffprobe", ["-v", "error", "-show_entries", "format=duration:format_tags", "-of", "json", file]);
+  const format = (JSON.parse(stdout) as { format?: { duration?: string; tags?: Record<string, unknown> } }).format ?? {};
+  const durationSeconds = Number(format.duration);
+  if (!Number.isFinite(durationSeconds)) throw new Error(`ffprobe could not read a duration from ${file}`);
+  const tags = Object.fromEntries(Object.entries(format.tags ?? {}).map(([key, value]) => [key.toLowerCase(), String(value)]));
+  return { durationSeconds, tags };
 }

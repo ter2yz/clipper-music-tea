@@ -1,11 +1,12 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { UserError } from "./errors.js";
+import { inspectEpisodeFolder } from "./inspect.js";
 import { startPreviewServer } from "./preview/server.js";
 import { renderEpisode } from "./render.js";
 import { checkEpisodeFolder, errorsIn, type Problem } from "./validation.js";
 
-const USAGE = "Usage: pnpm render <episode-folder>\n       pnpm preview <episode-folder> [--no-open]";
+const USAGE = "Usage: pnpm render <episode-folder>\n       pnpm preview <episode-folder> [--no-open]\n       pnpm inspect <episode-folder>";
 
 /** `pnpm <command>` runs from the repo root; INIT_CWD is where the user typed the command. */
 function episodeFolderArg(folderArg: string | undefined): string {
@@ -21,6 +22,11 @@ async function render(folderArg: string | undefined): Promise<void> {
   const result = await renderEpisode(episode, { log: (line) => console.log(line) });
   console.log(`Video:      ${result.video}`);
   console.log(`Timestamps: ${result.timestamps}`);
+}
+
+/** Prints the Episode Folder's facts as JSON — whether episode.yaml exists, the Background candidates, and each Track's file name, duration and tags — for /episode to propose a Tracklist from. */
+async function inspect(folderArg: string | undefined): Promise<void> {
+  console.log(JSON.stringify(await inspectEpisodeFolder(episodeFolderArg(folderArg)), null, 2));
 }
 
 async function preview(args: string[]): Promise<void> {
@@ -62,6 +68,8 @@ async function main(argv: string[]): Promise<void> {
       return render(rest[0]);
     case "preview":
       return preview(rest);
+    case "inspect":
+      return inspect(rest[0]);
     default:
       throw new UserError(USAGE);
   }

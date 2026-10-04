@@ -10,6 +10,7 @@
   "scripts": {
     "render": "tsx src/cli.ts render",
     "preview": "tsx src/cli.ts preview",
+    "inspect": "tsx src/cli.ts inspect",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
